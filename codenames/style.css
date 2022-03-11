@@ -1,0 +1,48 @@
+* {
+    color: white;
+    font-family: Arial;
+}
+body {
+    background-color: black;
+}
+
+.title-container {
+    text-align: center;
+    width: 10vh;
+    border-bottom: solid 5px hsl(200, 100%, 50%);
+}
+
+.game-board {
+    background-color: hsl(200, 25%, 80%);
+    height: 80vmin;
+    width: 80vmin;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tile-container {
+    width: 50vw;
+    margin-bottom: 30px;
+}
+
+.message-container {
+    width: 20vw;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.key-container {
+    width: 20vw;
+    display: flex;
+    flex-wrap: wrap;
+}
+.correctGuess {
+    background-color: hsl(150, 50%, 30%);
+    border: .25vmin solid black;
+}
+
+.wrongGuess {
+    background-color: hsl(25, 80%, 50%);
+}
