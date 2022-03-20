@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css" />
+    <title>Games</title>
+</head>
+<body>
+    <h1>Play wordle!</h1>
+
+    <form>
+        <div class="form_control">
+            <label for="your_word">Your new word</label>
+            <input
+                type="text"
+                name="Your new word"
+                id="your_word"
+                placeholder="Enter word..."
+                required
+            />
+        </div>
+        <div class="form_control">
+            <label for="word_type">Category for word</label>
+            <select name="Word type" id="word_type">
+                <option value="English">English word</option>
+                <option value="HarryPotter">Harry Potter</option>
+                <option value="Scientific">Scientific</option>
+            </select>
+        </div>
+    </form>
+
+        <button class="button" id="submit_word" >Submit</button/>
+    <script src="addwords.js"></script>
+</body>
+</html>

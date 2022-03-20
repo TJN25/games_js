@@ -1,0 +1,33 @@
+{
+  "name": "games_js",
+  "version": "1.0.0",
+  "description": "Random collection of games (and maybe other things) made for fun",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index",
+    "dev": "nodemon index"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TJN25/games_js.git"
+  },
+  "keywords": [
+    "games",
+    "random",
+    "fun"
+  ],
+  "author": "T J Nicholson",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TJN25/games_js/issues"
+  },
+  "homepage": "https://github.com/TJN25/games_js#readme",
+  "dependencies": {
+    "body-parser": "^1.19.2",
+    "express": "^4.17.3",
+    "moment": "^2.29.1",
+    "nedb": "^1.8.0",
+    "socket.io": "^4.4.1"
+  }
+}

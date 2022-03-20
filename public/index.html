@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css" />
+    <title>Games</title>
+</head>
+<body>
+    <h1>Play wordle!</h1>
+
+    <form>
+        <div class="form_control">
+            <label for="username">Name: </label>
+            <input
+                type="text"
+                name="name"
+                id="username"
+                placeholder="Enter name..."
+                required
+            />
+        </div>
+
+    </form>
+    <form action="/wordle">
+        <button class="button" id="submit_name">Wordle!</button/>
+    </form>
+    <form action="/codenames">
+        <div class="form_control">
+            <input
+                type="text"
+                name="codenamesId"
+                id="codenameid"
+                placeholder="Enter word..."
+                required
+            />
+        </div>
+        <button class="button" id="codenames_tab" name="side" value="A">Side A</button/>
+        <button class="button" id="codenames_tab" name="side" value="B">Side B</button/>
+    </form>
+        <button class="button" id="async_button_2">Test Async Behaviour</button/>
+    <script src="app.js"></script>
+</body>
+</html>

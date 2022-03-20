@@ -1,0 +1,46 @@
+:root {
+	--dark-color-a: #663aff;
+	--dark-color-b: #7486af;
+	--light-color: #e6e9ff;
+	--success-color: #5cb85f;
+	--error-color: #d9534f;
+}
+
+.btn {
+    cursor: pointer;
+    padding: 5px 15px;
+    background: var(--light-color);
+    color: var(--dark-color-a);
+    border: 0;
+    font-size: 17px;
+}
+
+.button {
+    width: 30%;
+    background-color: #4CAF50;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+.button:hover {
+    background-color: #45a049;
+  }
+
+  input[type=text], select {
+    width: 30%;
+    padding: 12px 20px;
+    margin: 8px 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  
+.form_control {
+    background: #ccd9cc;
+}  
+  
