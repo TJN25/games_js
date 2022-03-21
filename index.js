@@ -79,11 +79,12 @@ dbGames.loadDatabase(err => {
     if(err) console.log(err)
 })
 
-let gameBoard = {}
+let gameBoards = [];
 const rowCount = 2;
 const colCount = 5;
 app.get('/api/wordle/gameboard/:room', (req, res) => {
     const room = req.params.room
+    console.log(room)
     dbGames.find({name: room, game: "codenames"}, (err, docs) => {
         if(err) console.log(err);
         console.log(`Printing ${room} ${docs}`);
@@ -121,17 +122,24 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
             }
             dbGames.insert(newGameData)
             gameBoard = {
+                id: room,
                 guessRows: newGameData.guessRows,
                 colours: newGameData.colours
             }
+            gameBoards.push(gameBoard)
             res.json(gameBoard);
         })
         }else {
             console.log('existing');
             gameBoard = {
+                id: room,
                 guessRows: docs[0].guessRows,
                 colours: docs[0].colours
             }
+            const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+            if (gameBoardIndex == -1) {
+                gameBoards.push(gameBoard);
+            } 
             console.log(gameBoard); 
             res.json(gameBoard);
         }
@@ -141,27 +149,35 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
 })
 
 io.on('connection', socket => {
+
+    socket.on('joinRoom', ({side, codenamesId}) => {        
+        console.log(`Side ${side} from room ${codenamesId}`)
+        socket.join(codenamesId);
+    });
+
     console.log('New WS Connection...')
-    socket.on('button_clicked', ({side, id, codenamesId}) => {
-        console.log(`Side ${side} clicked on ${id}`)
+    socket.on('button_clicked', ({side, id, codenamesId}) => {        
+        console.log(`Side ${side} clicked on ${id} from room ${codenamesId}`)
         updateValue = {
             "colour": "green",
             "id": id
         }
-        updateGameBoard(side, id);
-        dbGames.update({name: codenamesId, game: "codenames"}, {colours: gameBoard.colours}, {}, (err, numReplaced) => {
+        updateGameBoard(side, id, codenamesId);
+        const gameBoardIndex = gameBoards.findIndex(x => x.id == codenamesId);
+        dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours}}, {}, (err, numReplaced) => {
             if (err) console.log('error');
-            io.emit('color_update', updateValue)
+            io.to(codenamesId).emit('color_update', updateValue)
         })
         
     })
 })
 
-function updateGameBoard(side, id) {
+function updateGameBoard(side, id, room) {
     const idArray = id.split('-');
     const guessRowIndex = idArray[1];
     const guessIndex = idArray[3];
-    gameBoard.colours[guessRowIndex][guessIndex] = 'g'
+    const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+    gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
     
 }
 

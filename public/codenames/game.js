@@ -7,6 +7,7 @@ const { codenamesId, side } = Qs.parse(location.search, {
 
 console.log(codenamesId, side);
 
+socket.emit('joinRoom', {side, codenamesId})
 
 //Set up the initial game state.
 // const titleDisplay = document.querySelector('.title-container')
@@ -60,15 +61,3 @@ socket.on('color_update', updateValue => {
     selectedTile.style.backgroundColor = '#548d4e';
 })
 
-
-// let wordle
-
-// const getWordle = () => {
-//     fetch('/api/targetWord')
-//         .then(response => response.json())
-//         .then(json => {
-//             wordle = json.word.toUpperCase()
-//         })
-//         .catch(err => console.log(err))
-// }
-// getWordle()
