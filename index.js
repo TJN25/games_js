@@ -80,7 +80,7 @@ dbGames.loadDatabase(err => {
 })
 
 let gameBoards = [];
-const rowCount = 2;
+const rowCount = 5;
 const colCount = 5;
 app.get('/api/wordle/gameboard/:room', (req, res) => {
     const room = req.params.room
@@ -94,7 +94,7 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 if(err2) console.log(err2);
                 const words = docs2[0].words;
                 const targets = [];
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i < 25; i++) {
                     const randomElement = Math.floor(Math.random() * words.length);
                     targets.push(words[randomElement]);
                     words.splice(randomElement, 1);
@@ -114,6 +114,9 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 "name": room,
                 "guessRows": guessRows,
                 "colours": [
+                        ['x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x'],
                         ['x', 'x', 'x', 'x'],
                         ['x', 'x', 'x', 'x']
                     ],

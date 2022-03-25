@@ -12,6 +12,10 @@ socket.emit('joinRoom', {side, codenamesId})
 //Set up the initial game state.
 // const titleDisplay = document.querySelector('.title-container')
 const tileDisplay = document.querySelector('.tile-container')
+const wordsDisplay = document.querySelector('.words-container')
+const greenContainer = document.getElementById('green-container')
+const greyContainer = document.getElementById('grey-container')
+const blackContainer = document.getElementById('black-container')
 
 async function drawGameState(codenamesId, side){
     const response = await fetch(`/api/wordle/gameboard/${codenamesId}`);
@@ -29,12 +33,28 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
     rowElement.setAttribute('id', 'guess-' + guessRowIndex)
     guessRow.forEach((guess, guessIndex) => {
         const tileElement = document.createElement('button')
+        const wordElement = document.createElement('div')
         var tileText = guessRows[guessRowIndex][guessIndex]
         var tileId = 'guessRow-' + guessRowIndex + '-tile-' + guessIndex
+        var wordId = tileText;
         tileElement.textContent = tileText
+        wordElement.textContent = tileText
         tileElement.setAttribute('id', tileId)
+        wordElement.setAttribute('id', wordId)
         tileElement.classList.add('tile')
+        if ((guessRowIndex * guessRow.length + guessIndex) < 10) {
+            wordElement.style.color = '#538d4e'
+            greenContainer.append(wordElement);
+        } else if ((guessRowIndex * guessRow.length + guessIndex) < 13) {
+            wordElement.style.color = '#121213'
+            blackContainer.append(wordElement);
+
+        } else {
+            wordElement.style.color = '#707064'
+            greyContainer.append(wordElement);
+        }
         tileElement.addEventListener('click', () => handleClick(tileText,tileId))
+        tileElement.style.color = '#ffffff'
         if (gameColors[guessRowIndex][guessIndex] == 'g' ) {
         tileElement.style.backgroundColor = '#548d4e'
         } else if (gameColors[guessRowIndex][guessIndex] == 'y' ) {
