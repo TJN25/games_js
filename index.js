@@ -90,7 +90,7 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
         console.log(`Printing ${room} ${docs}`);
         if(docs.length == 0) {
             console.log('new db entry')
-            dbCodenames.find({type: "main"}, (err2, docs2) => { 
+            dbCodenames.find({type: "hp"}, (err2, docs2) => { 
                 if(err2) console.log(err2);
                 const words = docs2[0].words;
                 const targets = [];
