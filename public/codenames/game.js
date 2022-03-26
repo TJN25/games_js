@@ -17,32 +17,31 @@ const greenContainer = document.getElementById('green-container')
 const greyContainer = document.getElementById('grey-container')
 const blackContainer = document.getElementById('black-container')
 
-async function drawGameState(codenamesId, side){
-    const response = await fetch(`/api/wordle/gameboard/${codenamesId}`);
-    const json = await response.json();
-    console.log(json);
-    const guessRows = await json.guessRows;
-    const gameColors = await json.colours;
-    console.log(guessRows);
+
+const button = document.getElementById('new_codenames_game');
+
+function loopGamboard(gameBoard) {
+    button.textContent = 'End turn'
+    const guessRows =  gameBoard.guessRows;
+    const gameColors = gameBoard.colours;
+    let colourValue = gameBoard.aColourValue;
+    if (side == 'B') {
+        colourValue = gameBoard.bColourValue
+    }
+    console.log(colourValue)   
     let currentRow = 0;
     let currentTile = 0;
-    if (side == 'A') {
-        const colourValue = await json.aColourValue
-    } else {
-        const colourValue = await json.bColourValue
-    }
-
-// This function needs to ask the server for the required colors list
+    // This function needs to ask the server for the required colors list
 guessRows.forEach((guessRow, guessRowIndex) =>  {
     const rowElement = document.createElement('div')
-    rowElement.setAttribute('id', 'guess-' + guessRowIndex)
+    rowElement.setAttribute('id', "row-element")
     guessRow.forEach((guess, guessIndex) => {
-        const tileElement = document.createElement('button')
+        const tileElement = document.createElement('div')
         const wordElement = document.createElement('div')
         var tileText = guessRows[guessRowIndex][guessIndex]
         var tileId = 'guessRow-' + guessRowIndex + '-tile-' + guessIndex
         var wordId = tileText;
-        tileElement.textContent = tileText
+        tileElement.textContent = tileText 
         wordElement.textContent = tileText
         tileElement.setAttribute('id', tileId)
         wordElement.setAttribute('id', wordId)
@@ -64,7 +63,10 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
         tileElement.style.backgroundColor = '#548d4e'
         } else if (gameColors[guessRowIndex][guessIndex] == 'y' ) {
             tileElement.style.backgroundColor = '#b59f3a'
+        } else if (gameColors[guessRowIndex][guessIndex] == 'b'){
+            tileElement.style.backgroundColor = '#000000'
         }
+
         rowElement.append(tileElement)
     })
     tileDisplay.append(rowElement)
@@ -73,16 +75,63 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
 })
 }
 
-drawGameState(codenamesId, side)
+
+button.addEventListener('click', async event => {
+    console.log(button.textContent)
+    if (button.textContent == 'New game') {
+    greenContainer.innerHTML = ""
+    blackContainer.innerHTML = ""
+    greyContainer.innerHTML = ""
+    tileDisplay.innerHTML = ""
+    fetch(`/api/codenames/newgame/${codenamesId}`);
+    } else {
+        fetch(`/api/codenames/endturn/${codenamesId}`)
+    }
+})
+
 
 function handleClick(value, id) {
     console.log(codenamesId);
     socket.emit('button_clicked', {side, id, codenamesId})
 }
 
+
+
 socket.on('color_update', updateValue => {
     console.log(updateValue)
-    const selectedTile = document.getElementById(updateValue.id);
-    selectedTile.style.backgroundColor = '#548d4e';
+    if (updateValue.gameOver) {
+        button.textContent = 'New game'
+    }
+    if (updateValue.moveAccepted){
+        const selectedTile = document.getElementById(updateValue.id);
+        selectedTile.classList.add('flip')
+        if (updateValue.colour == 'g') {
+        selectedTile.style.backgroundColor = '#548d4e';
+        } else if (updateValue.colour == 'b'){
+            selectedTile.style.background = "#000000"
+        selectedTile.style.backgroundColor = '#000000';
+        } else {
+            if (updateValue.colourBoth) {
+                selectedTile.style.background = "#b59f3a"
+            }else {
+            if (updateValue.side != side) {
+           selectedTile.style.background = "linear-gradient(5deg, #707064 80%, #b59f3a 60%)"
+            } else {
+           selectedTile.style.background = "linear-gradient(-175deg, #707064 80%, #b59f3a 60%)"
+            } 
+        }
+        }
+    }
+    
+    
 })
 
+socket.on('new_game', gameBoard => {
+    console.log('called')
+    console.log(gameBoard)
+    greenContainer.innerHTML = ""
+    blackContainer.innerHTML = ""
+    greyContainer.innerHTML = ""
+    tileDisplay.innerHTML = ""
+    loopGamboard(gameBoard)
+})

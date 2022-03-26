@@ -1,3 +1,12 @@
+/*TODO add a marker for an incorrect guess
+add a chat loog to list the guesses (enable scrolling)
+cross out words when they are guessed
+add a counter for number of turns, incorrect guesses and words left
+add a game over (win/lose) popup
+add a goal tree to select the goal you're going for
+track player sucess based on player names
+*/
+
 //require modules
 const express = require('express');
 const path = require('path');
@@ -28,12 +37,10 @@ const getWordleTarget = (db, wordLength) => {
         const randomElement = docs[Math.floor(Math.random() * docs.length)]
         const wordleTarget = randomElement.word.toUpperCase()
     })
-    // console.log(target);
 }
 
 
 
-console.log(wordleTarget)
 
 
 app.post('/api/words', (req, res) => {
@@ -49,7 +56,6 @@ app.post('/api/username', (req, res) => {
 
 app.post('/api/wordle', (req, res) => {
     const data = req.body;
-    console.log(data);
     returnData = {"word": "FLARE"}
     console.log(returnData);
     res.json(returnData);
@@ -82,14 +88,176 @@ dbGames.loadDatabase(err => {
 let gameBoards = [];
 const rowCount = 5;
 const colCount = 5;
-app.get('/api/wordle/gameboard/:room', (req, res) => {
+
+
+app.get('/api/codenames/newgame/:room', (req, res) => {
     const room = req.params.room
-    console.log(room)
+    const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+    if (gameBoardIndex != -1) {
+        gameBoards.splice(gameBoardIndex, 1);
+    }
+    dbGames.remove({name: room, game: "codenames"}, {}, (err, numRemoved) => {
+        if(err) console.error(err)
+        newGameBoard(room, res)
+    }) 
+})
+
+app.get('/api/codenames/endturn/:room',(req, res) => {
+    const room = req.params.room
+    const gameBoardIndex = gameBoards.findIndex(x => x.id == room)
+    gameBoards[gameBoardIndex].turn *= -1
+    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn * -1}}, {}, (err, numReplaced) => {
+        if (err) console.log('error');
+        res.end()
+    })})
+
+io.on('connection', socket => {
+
+    socket.on('joinRoom', ({side, codenamesId}) => {        
+        console.log(`Side ${side} from room ${codenamesId}`)
+        socket.join(codenamesId);
+        const room = codenamesId
     dbGames.find({name: room, game: "codenames"}, (err, docs) => {
         if(err) console.log(err);
-        console.log(`Printing ${room} ${docs}`);
         if(docs.length == 0) {
-            console.log('new db entry')
+           newGameBoard(room) ;
+        }else {
+            gameBoard = {
+                id: room,
+                guessRows: docs[0].guessRows,
+                colours: docs[0].colours
+            }
+            gameBoard = {
+                id: room,
+                guessRows: docs[0].guessRows,
+                colours: docs[0].colours,
+                aColourValue: docs[0].aColourValue,
+                bColourValue: docs[0].bColourValue,
+                aCanClick: docs[0].aCanClick,
+                bCanClick: docs[0].bCanClick,
+                gameOver: docs[0].gameOver,
+                gameWon: docs[0].gameWon,
+                turn: docs[0].turn
+            }
+            const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+            if (gameBoardIndex == -1) {
+                gameBoards.push(gameBoard);
+            }
+            io.to(room).emit('new_game', gameBoard)
+        }
+
+    })
+    });
+
+    socket.on('button_clicked', ({side, id, codenamesId}) => {        
+        console.log(`Side ${side} clicked on ${id} from room ${codenamesId}`)
+        
+        const moveAccepted = updateGameBoard(side, id, codenamesId);
+        
+        const gameBoardIndex = gameBoards.findIndex(x => x.id == codenamesId);
+        const idArray = id.split('-');
+        const guessRowIndex = idArray[1];
+        const guessIndex = idArray[3];
+        let colourBoth = false;
+        if (!gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] && !gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex]) {
+            colourBoth = true;
+        }
+        updateValue = {
+            "colour": gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex],
+            "id": id,
+            "moveAccepted": moveAccepted,
+            "gameOver": gameBoards[gameBoardIndex].gameOver,
+            "gameWon": gameBoards[gameBoardIndex].gameWon,
+            "side": side,
+            "colourBoth": colourBoth
+        }
+        console.log(updateValue);
+        dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours}}, {}, (err, numReplaced) => {
+            if (err) console.log('error');
+            io.to(codenamesId).emit('color_update', updateValue)
+        })
+        
+    })
+})
+
+
+
+function updateGameBoard(side, id, room) {
+    const idArray = id.split('-');
+    const guessRowIndex = idArray[1];
+    const guessIndex = idArray[3];
+    const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+    const currentBoard = gameBoards[gameBoardIndex];
+    const validTurn = checkValidTurn(side, currentBoard, guessRowIndex, guessIndex)
+    if (validTurn) {
+        console.log(`${side} can move`)
+        updateValues(side, gameBoardIndex, guessRowIndex, guessIndex);
+        return true;
+    } else {
+        console.log(`${side} cannot move. Turn is ${gameBoards[gameBoardIndex].turn}`)
+        return false;
+    }
+    
+    
+}
+
+function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex) {
+    if (side == 'A'){
+        
+        // gameBoards[gameBoardIndex].turn = -1
+        gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
+        if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'g'){
+            if (gameBoards[gameBoardIndex].turn == 0 ) {
+                gameBoards[gameBoardIndex].turn = -1
+            }
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
+        } else if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'b') {
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'b'
+            gameBoards[gameBoardIndex].turn = 1
+            gameBoards[gameBoardIndex].gameOver = true
+            gameBoards[gameBoardIndex].gameWon = false
+        } else {
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
+            gameBoards[gameBoardIndex].turn = 1
+        }
+    }
+    if (side == 'B') {
+        // gameBoards[gameBoardIndex].turn = 1
+        gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
+        if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'g'){
+            if (gameBoards[gameBoardIndex].turn == 0 ) {
+                gameBoards[gameBoardIndex].turn = 1
+            }
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
+        } else if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'b') {
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'b'
+            gameBoards[gameBoardIndex].turn = -1
+            gameBoards[gameBoardIndex].gameOver = true
+            gameBoards[gameBoardIndex].gameWon = false
+        } else {
+            gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
+            gameBoards[gameBoardIndex].turn = -1
+        }
+    }
+}
+
+function checkValidTurn(side, currentBoard, guessRowIndex, guessIndex) {
+    if (side == 'A' && currentBoard.turn == 1) {
+        return false;
+    } 
+    if (side == 'B' && currentBoard.turn == -1) {
+        return false;
+    }
+    if (side == 'A' && !currentBoard.aCanClick[guessRowIndex][guessIndex]) {
+        return false;
+    }
+    if (side == 'B' && !currentBoard.bCanClick[guessRowIndex][guessIndex]) {
+        return false;
+    }
+    return true;
+}
+
+async function newGameBoard(room) {
             dbCodenames.find({type: "hp"}, (err2, docs2) => { 
                 if(err2) console.log(err2);
                 const words = docs2[0].words;
@@ -102,14 +270,13 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 let selectedPositions = [];
                 let possibleIndexes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
                                         12, 13, 14, 15, 16, 17, 18, 19, 20, 
-                                        21, 22, 23, 24, 25]
+                                        21, 22, 23, 24]
                 for (let i = 0; i < 18; i++) {
                     const randomIndex = Math.floor(Math.random() * possibleIndexes.length);
                     selectedPositions.push(possibleIndexes[randomIndex]);
                     possibleIndexes.splice(randomIndex, 1);
                 }
                 
-                console.log(targets);
             let guessRows = [];
             for(let row = 0; row < rowCount; row++){
                 let guessRow = []
@@ -121,41 +288,42 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
             }
 
             const aColourValue = [
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x']
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x']
                                 ]
             const bColourValue = [
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x'],
-                                    ['x', 'x', 'x', 'x']
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x', 'x']
                                 ]
             let aCanClick = [
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true]
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true]
                                 ]
             let bCanClick = [
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true],
-                                    [true, true, true, true]
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true, true],
+                                    [true, true, true, true,true]
                                 ]
-            
+            console.log(`length of selection is ${selectedPositions.length} for ${selectedPositions}`)
             for (let i = 0; i < 18; i++) {
-                rowValue = Math.floor(i / 5);
-                colValue = i % 5;
+                rowValue = Math.floor(selectedPositions[i] / 5);
+                colValue = selectedPositions[i] % 5;
                 if (i < 9) {
                     aColourValue[rowValue][colValue] = 'g'
                 }
                 if (i > 5 && i < 15) {
+                    console.log(`${i} selecting ${selectedPositions[i]}`)
                     bColourValue[rowValue][colValue] = 'g'
                 }
                 if(i == 1) {
@@ -176,17 +344,18 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 }
 
             }
+            console.log(bColourValue);
             
             const newGameData = {
                 "game": "codenames",
                 "name": room,
                 "guessRows": guessRows,
                 "colours": [
-                        ['x', 'x', 'x', 'x'],
-                        ['x', 'x', 'x', 'x'],
-                        ['x', 'x', 'x', 'x'],
-                        ['x', 'x', 'x', 'x'],
-                        ['x', 'x', 'x', 'x']
+                        ['x', 'x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x', 'x'],
+                        ['x', 'x', 'x', 'x', 'x']
                     ],
                     "aColourValue": aColourValue,
                     "bColourValue": bColourValue,
@@ -212,70 +381,8 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 turn: newGameData.turn
             }
             gameBoards.push(gameBoard)
-            res.json(gameBoard);
+            io.to(room).emit('new_game', gameBoard)
         })
-        }else {
-            console.log('existing');
-            gameBoard = {
-                id: room,
-                guessRows: docs[0].guessRows,
-                colours: docs[0].colours
-            }
-            gameBoard = {
-                id: room,
-                guessRows: docs[0].guessRows,
-                colours: docs[0].colours,
-                aColourValue: docs[0].aColourValue,
-                bColourValue: docs[0].bColourValue,
-                aCanClick: docs[0].aCanClick,
-                bCanClick: docs[0].bCanClick,
-                gameOver: docs[0].gameOver,
-                gameWon: docs[0].gameWon,
-                turn: docs[0].turn
-            }
-            const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
-            if (gameBoardIndex == -1) {
-                gameBoards.push(gameBoard);
-            } 
-            console.log(gameBoard); 
-            res.json(gameBoard);
-        }
-
-    })
-    
-})
-
-io.on('connection', socket => {
-
-    socket.on('joinRoom', ({side, codenamesId}) => {        
-        console.log(`Side ${side} from room ${codenamesId}`)
-        socket.join(codenamesId);
-    });
-
-    console.log('New WS Connection...')
-    socket.on('button_clicked', ({side, id, codenamesId}) => {        
-        console.log(`Side ${side} clicked on ${id} from room ${codenamesId}`)
-        updateValue = {
-            "colour": "green",
-            "id": id
-        }
-        updateGameBoard(side, id, codenamesId);
-        const gameBoardIndex = gameBoards.findIndex(x => x.id == codenamesId);
-        dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours}}, {}, (err, numReplaced) => {
-            if (err) console.log('error');
-            io.to(codenamesId).emit('color_update', updateValue)
-        })
-        
-    })
-})
-
-function updateGameBoard(side, id, room) {
-    const idArray = id.split('-');
-    const guessRowIndex = idArray[1];
-    const guessIndex = idArray[3];
-    const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
-    gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
-    
 }
 
 //listen
