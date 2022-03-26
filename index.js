@@ -99,6 +99,16 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                     targets.push(words[randomElement]);
                     words.splice(randomElement, 1);
                 };
+                let selectedPositions = [];
+                let possibleIndexes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                                        12, 13, 14, 15, 16, 17, 18, 19, 20, 
+                                        21, 22, 23, 24, 25]
+                for (let i = 0; i < 18; i++) {
+                    const randomIndex = Math.floor(Math.random() * possibleIndexes.length);
+                    selectedPositions.push(possibleIndexes[randomIndex]);
+                    possibleIndexes.splice(randomIndex, 1);
+                }
+                
                 console.log(targets);
             let guessRows = [];
             for(let row = 0; row < rowCount; row++){
@@ -109,6 +119,64 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 }
                 guessRows.push(guessRow);
             }
+
+            const aColourValue = [
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x']
+                                ]
+            const bColourValue = [
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x'],
+                                    ['x', 'x', 'x', 'x']
+                                ]
+            let aCanClick = [
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true]
+                                ]
+            let bCanClick = [
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true],
+                                    [true, true, true, true]
+                                ]
+            
+            for (let i = 0; i < 18; i++) {
+                rowValue = Math.floor(i / 5);
+                colValue = i % 5;
+                if (i < 9) {
+                    aColourValue[rowValue][colValue] = 'g'
+                }
+                if (i > 5 && i < 15) {
+                    bColourValue[rowValue][colValue] = 'g'
+                }
+                if(i == 1) {
+                    bColourValue[rowValue][colValue] = 'b'
+                }
+                if (i == 10) {
+                    aColourValue[rowValue][colValue] = 'b'
+                }
+                if (i == 15) {
+                    aColourValue[rowValue][colValue] = 'b'
+                    bColourValue[rowValue][colValue] = 'b'
+                }
+                if (i == 16) {
+                    aColourValue[rowValue][colValue] = 'b'
+                }
+                if (i == 17) {
+                    bColourValue[rowValue][colValue]= 'b'
+                }
+
+            }
+            
             const newGameData = {
                 "game": "codenames",
                 "name": room,
@@ -120,14 +188,28 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                         ['x', 'x', 'x', 'x'],
                         ['x', 'x', 'x', 'x']
                     ],
+                    "aColourValue": aColourValue,
+                    "bColourValue": bColourValue,
+                    "aCanClick": aCanClick,
+                    "bCanClick": bCanClick,
                     "words": targets,
+                    "gameOver": false,
+                    "gameWon": false,
+                    "turn": 0,
                     "_id": room + ':codenames'
             }
             dbGames.insert(newGameData)
             gameBoard = {
                 id: room,
                 guessRows: newGameData.guessRows,
-                colours: newGameData.colours
+                colours: newGameData.colours,
+                aColourValue: newGameData.aColourValue,
+                bColourValue: newGameData.bColourValue,
+                aCanClick: newGameData.aCanClick,
+                bCanClick: newGameData.bCanClick,
+                gameOver: newGameData.gameOver,
+                gameWon: newGameData.gameWon,
+                turn: newGameData.turn
             }
             gameBoards.push(gameBoard)
             res.json(gameBoard);
@@ -138,6 +220,18 @@ app.get('/api/wordle/gameboard/:room', (req, res) => {
                 id: room,
                 guessRows: docs[0].guessRows,
                 colours: docs[0].colours
+            }
+            gameBoard = {
+                id: room,
+                guessRows: docs[0].guessRows,
+                colours: docs[0].colours,
+                aColourValue: docs[0].aColourValue,
+                bColourValue: docs[0].bColourValue,
+                aCanClick: docs[0].aCanClick,
+                bCanClick: docs[0].bCanClick,
+                gameOver: docs[0].gameOver,
+                gameWon: docs[0].gameWon,
+                turn: docs[0].turn
             }
             const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
             if (gameBoardIndex == -1) {

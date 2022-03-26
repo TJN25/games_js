@@ -26,6 +26,11 @@ async function drawGameState(codenamesId, side){
     console.log(guessRows);
     let currentRow = 0;
     let currentTile = 0;
+    if (side == 'A') {
+        const colourValue = await json.aColourValue
+    } else {
+        const colourValue = await json.bColourValue
+    }
 
 // This function needs to ask the server for the required colors list
 guessRows.forEach((guessRow, guessRowIndex) =>  {
@@ -42,10 +47,10 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
         tileElement.setAttribute('id', tileId)
         wordElement.setAttribute('id', wordId)
         tileElement.classList.add('tile')
-        if ((guessRowIndex * guessRow.length + guessIndex) < 10) {
+        if (colourValue[guessRowIndex][guessIndex] == 'g') {
             wordElement.style.color = '#538d4e'
             greenContainer.append(wordElement);
-        } else if ((guessRowIndex * guessRow.length + guessIndex) < 13) {
+        } else if (colourValue[guessRowIndex][guessIndex] == 'b') {
             wordElement.style.color = '#121213'
             blackContainer.append(wordElement);
 
