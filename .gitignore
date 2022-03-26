@@ -6,3 +6,4 @@ lib64
 pyvenv.cfg
 share/
 node_modules/
+games.db
