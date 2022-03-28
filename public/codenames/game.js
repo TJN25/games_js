@@ -21,12 +21,23 @@ const blackContainer = document.getElementById('black-container')
 const button = document.getElementById('new_codenames_game');
 
 function loopGamboard(gameBoard) {
+    button.classList.add('flip')
     button.textContent = 'End turn'
+    button.style.background = '#45a049'
     const guessRows =  gameBoard.guessRows;
     const gameColors = gameBoard.colours;
+    let canGuess = gameBoard.aCanClick;
+    const turnSide = gameBoard.turn
     let colourValue = gameBoard.aColourValue;
     if (side == 'B') {
         colourValue = gameBoard.bColourValue
+        canGuess = gameBoard.bCanClick;
+    }
+
+    if ((turnSide == -1 && side == 'B') || (turnSide == 1 && side == 'A')) {
+        console.log(`${turnSide} ${side}`)
+        button.textContent = 'Wordmaster'
+        button.style.background = '#1c2fbd'
     }
     console.log(colourValue)   
     let currentRow = 0;
@@ -45,6 +56,9 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
         wordElement.textContent = tileText
         tileElement.setAttribute('id', tileId)
         wordElement.setAttribute('id', wordId)
+        if (!canGuess[guessRowIndex][guessIndex]) {
+            wordElement.style.textDecoration = "line-through";
+        }
         tileElement.classList.add('tile')
         if (colourValue[guessRowIndex][guessIndex] == 'g') {
             wordElement.style.color = '#538d4e'
@@ -72,6 +86,11 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
     tileDisplay.append(rowElement)
     const tile = document.getElementById('guessRow-' + currentRow + '-tile-' + currentTile);
     //tile.style.backgroundColor = '#3a3b3c';
+    if (gameBoard.gameOver) {
+        button.textContent = 'New game'
+        button.style.background = '#d1361b'
+        gameOverScreen(gameBoard.gameWon, 1, 1)
+    }
 })
 }
 
@@ -84,7 +103,7 @@ button.addEventListener('click', async event => {
     greyContainer.innerHTML = ""
     tileDisplay.innerHTML = ""
     fetch(`/api/codenames/newgame/${codenamesId}`);
-    } else {
+    } else if (button.textContent == 'End turn') {
         fetch(`/api/codenames/endturn/${codenamesId}`)
     }
 })
@@ -95,15 +114,28 @@ function handleClick(value, id) {
     socket.emit('button_clicked', {side, id, codenamesId})
 }
 
-
+socket.on('endTurn', turnValue => {
+    if (turnValue.side == side) {
+           button.textContent = 'Wordmaster'
+           button.style.background = '#1c2fbd'
+    } else {
+        button.textContent = 'End turn'
+        button.style.background = '#548d4e'
+    }
+})
 
 socket.on('color_update', updateValue => {
     console.log(updateValue)
     if (updateValue.gameOver) {
         button.textContent = 'New game'
+        button.style.background = '#d1361b'
+        gameOverScreen(updateValue.gameWon, 1, 1)
     }
     if (updateValue.moveAccepted){
         const selectedTile = document.getElementById(updateValue.id);
+        const selectedWord = document.getElementById(updateValue.word);
+        selectedWord.style.textDecoration = "line-through"
+        console.log(selectedWord)
         selectedTile.classList.add('flip')
         if (updateValue.colour == 'g') {
         selectedTile.style.backgroundColor = '#548d4e';
@@ -115,9 +147,13 @@ socket.on('color_update', updateValue => {
                 selectedTile.style.background = "#b59f3a"
             }else {
             if (updateValue.side != side) {
+                button.textContent = 'End turn'
+                button.style.background = '#548d4e'
            selectedTile.style.background = "linear-gradient(5deg, #707064 80%, #b59f3a 60%)"
             } else {
            selectedTile.style.background = "linear-gradient(-175deg, #707064 80%, #b59f3a 60%)"
+                button.textContent = 'Wordmaster'
+                button.style.background = '#1c2fbd'
             } 
         }
         }
@@ -125,6 +161,15 @@ socket.on('color_update', updateValue => {
     
     
 })
+
+
+function gameOverScreen (gameWon, turns, incorrectGuesses) {
+    if(gameWon) {
+        console.log(`You won the game in ${turns} turn with ${incorrectGuesses} incorrect guesses`)
+    } else {
+        console.log(`You lost the game in ${turns} turn with ${incorrectGuesses} incorrect guesses`)
+    }
+}
 
 socket.on('new_game', gameBoard => {
     console.log('called')

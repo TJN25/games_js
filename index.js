@@ -105,9 +105,20 @@ app.get('/api/codenames/newgame/:room', (req, res) => {
 app.get('/api/codenames/endturn/:room',(req, res) => {
     const room = req.params.room
     const gameBoardIndex = gameBoards.findIndex(x => x.id == room)
+    let turnValue = {}
+    if ( gameBoards[gameBoardIndex].turn == 1 ) {
+        turnValue = {
+            "side": "B"
+        } 
+    } else {
+        turnValue = {
+            "side": "A"
+        }
+    }
     gameBoards[gameBoardIndex].turn *= -1
-    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn * -1}}, {}, (err, numReplaced) => {
+    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn}}, {}, (err, numReplaced) => {
         if (err) console.log('error');
+        io.to(room).emit('endTurn', turnValue)
         res.end()
     })})
 
@@ -143,6 +154,7 @@ io.on('connection', socket => {
             if (gameBoardIndex == -1) {
                 gameBoards.push(gameBoard);
             }
+            console.log(gameBoard)
             io.to(room).emit('new_game', gameBoard)
         }
 
@@ -169,10 +181,14 @@ io.on('connection', socket => {
             "gameOver": gameBoards[gameBoardIndex].gameOver,
             "gameWon": gameBoards[gameBoardIndex].gameWon,
             "side": side,
-            "colourBoth": colourBoth
+            "colourBoth": colourBoth,
+            "word": gameBoards[gameBoardIndex].guessRows[guessRowIndex][guessIndex]
         }
         console.log(updateValue);
-        dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours}}, {}, (err, numReplaced) => {
+        dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours, aColourValue: gameBoards[gameBoardIndex].aColourValue, 
+                                                                    bColourValue: gameBoards[gameBoardIndex].bColourValue, aCanClick: gameBoards[gameBoardIndex].aCanClick, 
+                                                                    bCanClick: gameBoards[gameBoardIndex].bCanClick, gameOver: gameBoards[gameBoardIndex].gameOver, 
+                                                                    gameWon: gameBoards[gameBoardIndex].gameWon, turn: gameBoards[gameBoardIndex].turn}}, {}, (err, numReplaced) => {
             if (err) console.log('error');
             io.to(codenamesId).emit('color_update', updateValue)
         })
@@ -191,7 +207,7 @@ function updateGameBoard(side, id, room) {
     const validTurn = checkValidTurn(side, currentBoard, guessRowIndex, guessIndex)
     if (validTurn) {
         console.log(`${side} can move`)
-        updateValues(side, gameBoardIndex, guessRowIndex, guessIndex);
+        updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room);
         return true;
     } else {
         console.log(`${side} cannot move. Turn is ${gameBoards[gameBoardIndex].turn}`)
@@ -201,7 +217,7 @@ function updateGameBoard(side, id, room) {
     
 }
 
-function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex) {
+function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
     if (side == 'A'){
         
         // gameBoards[gameBoardIndex].turn = -1
@@ -209,13 +225,16 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex) {
         if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'g'){
             if (gameBoards[gameBoardIndex].turn == 0 ) {
                 gameBoards[gameBoardIndex].turn = -1
+                io.to(room).emit('endTurn', {"side": "B"})
             }
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
+            gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         } else if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'b') {
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'b'
             gameBoards[gameBoardIndex].turn = 1
             gameBoards[gameBoardIndex].gameOver = true
             gameBoards[gameBoardIndex].gameWon = false
+            gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         } else {
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
             gameBoards[gameBoardIndex].turn = 1
@@ -226,14 +245,17 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex) {
         gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'g'){
             if (gameBoards[gameBoardIndex].turn == 0 ) {
+                io.to(room).emit('endTurn', {"side": "A"})
                 gameBoards[gameBoardIndex].turn = 1
             }
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'g'
+            gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         } else if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'b') {
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'b'
             gameBoards[gameBoardIndex].turn = -1
             gameBoards[gameBoardIndex].gameOver = true
             gameBoards[gameBoardIndex].gameWon = false
+            gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         } else {
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
             gameBoards[gameBoardIndex].turn = -1
@@ -252,6 +274,9 @@ function checkValidTurn(side, currentBoard, guessRowIndex, guessIndex) {
         return false;
     }
     if (side == 'B' && !currentBoard.bCanClick[guessRowIndex][guessIndex]) {
+        return false;
+    }
+    if (currentBoard.gameOver) {
         return false;
     }
     return true;
