@@ -202,3 +202,10 @@ body {
 	height: 15px;
 	flex: 1;
 }
+
+.current-score {
+    position: absolute;
+    color: #121213;
+    bottom: 6%;
+    right: 18%;
+}

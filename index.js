@@ -1,10 +1,8 @@
-/*TODO add a marker for an incorrect guess
-add a chat loog to list the guesses (enable scrolling)
-cross out words when they are guessed
-add a counter for number of turns, incorrect guesses and words left
-add a game over (win/lose) popup
-add a goal tree to select the goal you're going for
-track player sucess based on player names
+/*TODO 
+Add automatic turn switching when a player haas guessed all the words
+Check the final score is reported correctly
+Need to recolour incorrect guesses on refresh.
+Sizing is not good on tablet
 */
 
 //require modules
@@ -13,7 +11,8 @@ const path = require('path');
 const http = require('http');
 const socketio = require('socket.io');
 const Datastore = require('nedb');
-const { getWordleColors, getWordleTargetExternal } = require('./wordle/wordle_colors.js')
+const { getWordleColors, getWordleTargetExternal } = require('./wordle/wordle_colors.js');
+const { all } = require('express/lib/application');
 
 //setup of the server
 const app = express();
@@ -57,16 +56,13 @@ app.post('/api/username', (req, res) => {
 app.post('/api/wordle', (req, res) => {
     const data = req.body;
     returnData = {"word": "FLARE"}
-    console.log(returnData);
     res.json(returnData);
   });
 
 app.get('/api/targetWord', (req, res) => {
-    console.log('request made for word');
     db.find({length: 5}, (err, docs) => {
         if(err) return console.log(err);
         const randomElement = docs[Math.floor(Math.random() * docs.length)]
-        console.log(randomElement.word);
         res.json(randomElement);
     })
 })
@@ -86,6 +82,7 @@ dbGames.loadDatabase(err => {
 })
 
 let gameBoards = [];
+let allMessages = [];
 const rowCount = 5;
 const colCount = 5;
 
@@ -98,25 +95,33 @@ app.get('/api/codenames/newgame/:room', (req, res) => {
     }
     dbGames.remove({name: room, game: "codenames"}, {}, (err, numRemoved) => {
         if(err) console.error(err)
-        newGameBoard(room, res)
+        newGameBoard(room, {"text1" :"no"})
     }) 
+    res.end;
 })
 
 app.get('/api/codenames/endturn/:room',(req, res) => {
     const room = req.params.room
     const gameBoardIndex = gameBoards.findIndex(x => x.id == room)
+    gameBoards[gameBoardIndex].turnsCounter += 1
     let turnValue = {}
     if ( gameBoards[gameBoardIndex].turn == 1 ) {
         turnValue = {
-            "side": "B"
+            "side": "B",
+            "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
+            "wordsRemaining": gameBoards[gameBoardIndex].wordsRemaining,
+            "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
         } 
     } else {
         turnValue = {
-            "side": "A"
+            "side": "A",
+            "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
+            "wordsRemaining": gameBoards[gameBoardIndex].wordsRemaining,
+            "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
         }
     }
     gameBoards[gameBoardIndex].turn *= -1
-    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn}}, {}, (err, numReplaced) => {
+    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn, turnsCounter: gameBoards[gameBoardIndex].turnsCounter}}, {}, (err, numReplaced) => {
         if (err) console.log('error');
         io.to(room).emit('endTurn', turnValue)
         res.end()
@@ -128,16 +133,14 @@ io.on('connection', socket => {
         console.log(`Side ${side} from room ${codenamesId}`)
         socket.join(codenamesId);
         const room = codenamesId
+        const currentMessage = {"text1": `Side ${side}`, "colour1": "#1c2fbd", "bold1": true,
+                                  "text2": `joined ${codenamesId}`, "colour2": "#707064", "bold2": false}
     dbGames.find({name: room, game: "codenames"}, (err, docs) => {
         if(err) console.log(err);
         if(docs.length == 0) {
-           newGameBoard(room) ;
+           newGameBoard(room, currentMessage) ;
         }else {
-            gameBoard = {
-                id: room,
-                guessRows: docs[0].guessRows,
-                colours: docs[0].colours
-            }
+            
             gameBoard = {
                 id: room,
                 guessRows: docs[0].guessRows,
@@ -148,14 +151,20 @@ io.on('connection', socket => {
                 bCanClick: docs[0].bCanClick,
                 gameOver: docs[0].gameOver,
                 gameWon: docs[0].gameWon,
-                turn: docs[0].turn
+                turn: docs[0].turn,
+                turnsCounter: docs[0].turnsCounter,
+                wordsRemaining: docs[0].wordsRemaining,
+                incorrectGuesses: docs[0].incorrectGuesses,
+                messages: docs[0].messages
             }
-            const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
+            let gameBoardIndex = gameBoards.findIndex(x => x.id == room);
             if (gameBoardIndex == -1) {
                 gameBoards.push(gameBoard);
+                gameBoardIndex = gameBoards.findIndex(x => x.id == room); 
             }
-            console.log(gameBoard)
-            io.to(room).emit('new_game', gameBoard)
+            gameBoards[gameBoardIndex].messages.push(currentMessage);
+            io.to(room).emit('new_game', gameBoard);
+            io.to(room).emit('message', gameBoards[gameBoardIndex].messages);
         }
 
     })
@@ -182,18 +191,33 @@ io.on('connection', socket => {
             "gameWon": gameBoards[gameBoardIndex].gameWon,
             "side": side,
             "colourBoth": colourBoth,
-            "word": gameBoards[gameBoardIndex].guessRows[guessRowIndex][guessIndex]
+            "word": gameBoards[gameBoardIndex].guessRows[guessRowIndex][guessIndex],
+            "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
+            "wordsRemaining": gameBoards[gameBoardIndex].wordsRemaining,
+            "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
         }
-        console.log(updateValue);
+        let textColour = '#707064'
+        if (updateValue.colour == 'g') {
+            textColour = '#538d4e'
+        } else if (updateValue.colour == 'b') {
+            textColour = '#121213'
+        }
+        const currentMessage = {"text1": `Side ${side} clicked`, "colour1": "#707064", "bold1": false, "text2": `${gameBoards[gameBoardIndex].guessRows[guessRowIndex][guessIndex]}`, "colour2": textColour, "bold2": true};
+        gameBoards[gameBoardIndex].messages.push(currentMessage);
         dbGames.update({name: codenamesId, game: "codenames"}, {$set: {colours: gameBoards[gameBoardIndex].colours, aColourValue: gameBoards[gameBoardIndex].aColourValue, 
                                                                     bColourValue: gameBoards[gameBoardIndex].bColourValue, aCanClick: gameBoards[gameBoardIndex].aCanClick, 
                                                                     bCanClick: gameBoards[gameBoardIndex].bCanClick, gameOver: gameBoards[gameBoardIndex].gameOver, 
-                                                                    gameWon: gameBoards[gameBoardIndex].gameWon, turn: gameBoards[gameBoardIndex].turn}}, {}, (err, numReplaced) => {
+                                                                    gameWon: gameBoards[gameBoardIndex].gameWon, turn: gameBoards[gameBoardIndex].turn,
+                                                                turnsCounter: gameBoards[gameBoardIndex].turnsCounter, wordsRemaining: gameBoards[gameBoardIndex].wordsRemaining,
+                                                            messages: gameBoards[gameBoardIndex].messages, incorrectGuesses: gameBoards[gameBoardIndex].incorrectGuesses}}, {}, (err, numReplaced) => {
             if (err) console.log('error');
             io.to(codenamesId).emit('color_update', updateValue)
+            io.to(codenamesId).emit('message', [currentMessage])
+            
         })
         
     })
+
 })
 
 
@@ -223,6 +247,12 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
         // gameBoards[gameBoardIndex].turn = -1
         gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'g'){
+            gameBoards[gameBoardIndex].wordsRemaining -= 1
+            if (gameBoards[gameBoardIndex].wordsRemaining == 0) {
+                console.log(`words remaining: ${gameBoards[gameBoardIndex].wordsRemaining}`)
+                gameBoards[gameBoardIndex].gameOver = true;
+                gameBoards[gameBoardIndex].gameWon = true;
+            }
             if (gameBoards[gameBoardIndex].turn == 0 ) {
                 gameBoards[gameBoardIndex].turn = -1
                 io.to(room).emit('endTurn', {"side": "B"})
@@ -236,6 +266,8 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
             gameBoards[gameBoardIndex].gameWon = false
             gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         } else {
+            gameBoards[gameBoardIndex].turnsCounter += 1
+            gameBoards[gameBoardIndex].incorrectGuesses += 1
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
             gameBoards[gameBoardIndex].turn = 1
         }
@@ -244,6 +276,11 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
         // gameBoards[gameBoardIndex].turn = 1
         gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'g'){
+            gameBoards[gameBoardIndex].wordsRemaining -= 1
+            if(gameBoards[gameBoardIndex].wordsRemaining == 0) {
+            gameBoards[gameBoardIndex].gameOver = true;
+            gameBoards[gameBoardIndex].gameWon = true;
+            }
             if (gameBoards[gameBoardIndex].turn == 0 ) {
                 io.to(room).emit('endTurn', {"side": "A"})
                 gameBoards[gameBoardIndex].turn = 1
@@ -257,6 +294,8 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
             gameBoards[gameBoardIndex].gameWon = false
             gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         } else {
+            gameBoards[gameBoardIndex].turnsCounter += 1
+            gameBoards[gameBoardIndex].incorrectGuesses += 1
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
             gameBoards[gameBoardIndex].turn = -1
         }
@@ -282,7 +321,7 @@ function checkValidTurn(side, currentBoard, guessRowIndex, guessIndex) {
     return true;
 }
 
-async function newGameBoard(room) {
+async function newGameBoard(room, currentMessage) {
             dbCodenames.find({type: "hp"}, (err2, docs2) => { 
                 if(err2) console.log(err2);
                 const words = docs2[0].words;
@@ -340,7 +379,6 @@ async function newGameBoard(room) {
                                     [true, true, true, true, true],
                                     [true, true, true, true,true]
                                 ]
-            console.log(`length of selection is ${selectedPositions.length} for ${selectedPositions}`)
             for (let i = 0; i < 18; i++) {
                 rowValue = Math.floor(selectedPositions[i] / 5);
                 colValue = selectedPositions[i] % 5;
@@ -348,7 +386,6 @@ async function newGameBoard(room) {
                     aColourValue[rowValue][colValue] = 'g'
                 }
                 if (i > 5 && i < 15) {
-                    console.log(`${i} selecting ${selectedPositions[i]}`)
                     bColourValue[rowValue][colValue] = 'g'
                 }
                 if(i == 1) {
@@ -369,7 +406,6 @@ async function newGameBoard(room) {
                 }
 
             }
-            console.log(bColourValue);
             
             const newGameData = {
                 "game": "codenames",
@@ -390,6 +426,11 @@ async function newGameBoard(room) {
                     "gameOver": false,
                     "gameWon": false,
                     "turn": 0,
+                    "turnsCounter": 0,
+                    "incorrectGuesses": 0,
+                    "wordsRemaining": 15,
+                    "messages": [{"text1": "Starting a new game", "colour1": "#707064", "bold1" : false, 
+                                    "text2": "", "colour2": "#707064", "bold2": false}],
                     "_id": room + ':codenames'
             }
             dbGames.insert(newGameData)
@@ -403,10 +444,25 @@ async function newGameBoard(room) {
                 bCanClick: newGameData.bCanClick,
                 gameOver: newGameData.gameOver,
                 gameWon: newGameData.gameWon,
-                turn: newGameData.turn
+                turn: newGameData.turn,
+                turnsCounter: 0,
+                incorrectGuesses: 0,
+                messages: [{"text1": "Starting a new game", "colour1": "#707064", "bold1" : false, 
+                "text2": "", "colour2": "#707064", "bold2": false}],
+                wordsRemaining: 15
             }
             gameBoards.push(gameBoard)
+            const gameBoardIndex = gameBoards.findIndex(x => x.id == room);
             io.to(room).emit('new_game', gameBoard)
+            if (currentMessage.text1 != 'no') {
+                console.log('updating player join')
+            gameBoards[gameBoardIndex].messages.push(currentMessage);
+            io.to(room).emit('message', [currentMessage]);
+            } else {
+                console.log('new game')
+                io.to(room).emit('message', [{"text1": "Starting a new game", "colour1": "#707064", "bold1" : false, 
+                "text2": "", "colour2": "#707064", "bold2": false}]);
+            }
         })
 }
 

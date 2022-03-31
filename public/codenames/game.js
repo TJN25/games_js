@@ -11,16 +11,23 @@ socket.emit('joinRoom', {side, codenamesId})
 
 //Set up the initial game state.
 // const titleDisplay = document.querySelector('.title-container')
+const titleDisplay = document.querySelector('.title-container')
 const tileDisplay = document.querySelector('.tile-container')
 const wordsDisplay = document.querySelector('.words-container')
 const greenContainer = document.getElementById('green-container')
 const greyContainer = document.getElementById('grey-container')
 const blackContainer = document.getElementById('black-container')
-
+const chatMessages = document.querySelector('.chat-messages');
+const currentScore = document.querySelector('.current-score');
 
 const button = document.getElementById('new_codenames_game');
 
 function loopGamboard(gameBoard) {
+    titleDisplay.innerHTML = ""
+    titleDiv = document.createElement('h1');
+    titleDiv.textContent = 'Codenames'
+    titleDisplay.appendChild(titleDiv)
+    currentScore.textContent = `${gameBoard.wordsRemaining} words remaining after ${gameBoard.turnsCounter} turns and ${gameBoard.incorrectGuesses} incorrect guesses`
     button.classList.add('flip')
     button.textContent = 'End turn'
     button.style.background = '#45a049'
@@ -115,6 +122,7 @@ function handleClick(value, id) {
 }
 
 socket.on('endTurn', turnValue => {
+    console.log(turnValue)
     if (turnValue.side == side) {
            button.textContent = 'Wordmaster'
            button.style.background = '#1c2fbd'
@@ -122,14 +130,16 @@ socket.on('endTurn', turnValue => {
         button.textContent = 'End turn'
         button.style.background = '#548d4e'
     }
+    currentScore.textContent = `${turnValue.wordsRemaining} words remaining after ${turnValue.turnsCounter} turns and ${turnValue.incorrectGuesses} incorrect guesses`
 })
 
 socket.on('color_update', updateValue => {
+    currentScore.textContent = `${updateValue.wordsRemaining} words remaining after ${updateValue.turnsCounter} turns and ${updateValue.incorrectGuesses} incorrect guesses`
     console.log(updateValue)
     if (updateValue.gameOver) {
         button.textContent = 'New game'
         button.style.background = '#d1361b'
-        gameOverScreen(updateValue.gameWon, 1, 1)
+        gameOverScreen(updateValue.gameWon, updateValue.turnsCounter, updateValue.incorrectGuesses, updateValue.wordsRemaining)
     }
     if (updateValue.moveAccepted){
         const selectedTile = document.getElementById(updateValue.id);
@@ -162,18 +172,69 @@ socket.on('color_update', updateValue => {
     
 })
 
+socket.on('message', messages => {
+    for(let i = 0; i < messages.length; i++) {
+        if (messages[i].text1 == 'Starting a new game') {
+            chatMessages.innerHTML = ""
+        }
+        console.log(messages[i])
+        outputMessage(messages[i]);
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+})
 
-function gameOverScreen (gameWon, turns, incorrectGuesses) {
+function outputMessage(message) {
+    const div = document.createElement('div');
+    const span1 = document.createElement('span');
+    const span2 = document.createElement('span');
+    div.classList.add('message')
+    span1.textContent = `${message.text1} `
+    span1.style.color = message.colour1
+    if (message.bold1) {
+        span1.style.fontWeight = '900'
+    }
+    span2.textContent = message.text2
+    span2.style.color = message.colour2
+    if (message.bold2) {
+        span2.style.fontWeight = '900'
+    }
+    div.append(span1)
+    div.append(span2)
+    document.querySelector('.chat-messages').appendChild(div);
+}
+
+
+function gameOverScreen (gameWon, turns, incorrectGuesses, wordsRemaining) {
     if(gameWon) {
-        console.log(`You won the game in ${turns} turn with ${incorrectGuesses} incorrect guesses`)
+        titleDisplay.innerHTML = ""
+        div = document.createElement('h1');
+        div1 = document.createElement('span');
+        div2 = document.createElement('span');
+        div1.textContent = `You won ` 
+        div1.style.color = '#548d4e'
+        div2.textContent = `in ${turns + 1} turn with ${incorrectGuesses} incorrect guesses`
+        div.append(div1)
+        div.append(div2)
+        titleDisplay.appendChild(div)
+
     } else {
-        console.log(`You lost the game in ${turns} turn with ${incorrectGuesses} incorrect guesses`)
+        titleDisplay.innerHTML = ""
+        div = document.createElement('h1');
+        div1 = document.createElement('span');
+        div2 = document.createElement('span');
+        div1.textContent = `You lost ` 
+        div1.style.color = '#d1361b'
+        div2.textContent = `in ${turns + 1} turns`
+        if (turns == 1){
+            div2.textContent = `in ${turns} turn`
+        }
+        div.append(div1)
+        div.append(div2)
+        titleDisplay.appendChild(div)
     }
 }
 
 socket.on('new_game', gameBoard => {
-    console.log('called')
-    console.log(gameBoard)
     greenContainer.innerHTML = ""
     blackContainer.innerHTML = ""
     greyContainer.innerHTML = ""
