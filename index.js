@@ -1,8 +1,8 @@
 /*TODO 
-Add automatic turn switching when a player haas guessed all the words
-Check the final score is reported correctly
-Need to recolour incorrect guesses on refresh.
-Sizing is not good on tablet
+Game is now working.
+Pick a word needs to appear for the first turn
+The forced player change does not increase the turn counter or force a word
+to be selected
 */
 
 //require modules
@@ -104,8 +104,11 @@ app.get('/api/codenames/endturn/:room',(req, res) => {
     const room = req.params.room
     const gameBoardIndex = gameBoards.findIndex(x => x.id == room)
     gameBoards[gameBoardIndex].turnsCounter += 1
+    gameBoards[gameBoardIndex].canEndTurn = false
+    const wordsRemainingArray = getWordsRemaining(gameBoards[gameBoardIndex]);
     let turnValue = {}
-    if ( gameBoards[gameBoardIndex].turn == 1 ) {
+    if ( (gameBoards[gameBoardIndex].turn == 1 && wordsRemainingArray.bGreenCounts > 0) || wordsRemainingArray.aGreenCounts == 0) {
+        gameBoards[gameBoardIndex].turn = -1
         turnValue = {
             "side": "B",
             "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
@@ -113,6 +116,7 @@ app.get('/api/codenames/endturn/:room',(req, res) => {
             "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
         } 
     } else {
+        gameBoards[gameBoardIndex].turn = 1
         turnValue = {
             "side": "A",
             "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
@@ -120,8 +124,7 @@ app.get('/api/codenames/endturn/:room',(req, res) => {
             "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
         }
     }
-    gameBoards[gameBoardIndex].turn *= -1
-    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn, turnsCounter: gameBoards[gameBoardIndex].turnsCounter}}, {}, (err, numReplaced) => {
+    dbGames.update({name: room, game: "codenames"}, {$set: {turn: gameBoards[gameBoardIndex].turn, turnsCounter: gameBoards[gameBoardIndex].turnsCounter, canEndTurn: gameBoards[gameBoardIndex].canEndTurn}}, {}, (err, numReplaced) => {
         if (err) console.log('error');
         io.to(room).emit('endTurn', turnValue)
         res.end()
@@ -155,7 +158,10 @@ io.on('connection', socket => {
                 turnsCounter: docs[0].turnsCounter,
                 wordsRemaining: docs[0].wordsRemaining,
                 incorrectGuesses: docs[0].incorrectGuesses,
-                messages: docs[0].messages
+                messages: docs[0].messages,
+                canEndTurn: docs[0].canEndTurn,
+                aWordsRemaining: docs[0].aWordsRemaining,
+                bWordsRemaining: docs[0].bWordsRemaining
             }
             let gameBoardIndex = gameBoards.findIndex(x => x.id == room);
             if (gameBoardIndex == -1) {
@@ -174,7 +180,7 @@ io.on('connection', socket => {
         console.log(`Side ${side} clicked on ${id} from room ${codenamesId}`)
         
         const moveAccepted = updateGameBoard(side, id, codenamesId);
-        
+        if (moveAccepted) { 
         const gameBoardIndex = gameBoards.findIndex(x => x.id == codenamesId);
         const idArray = id.split('-');
         const guessRowIndex = idArray[1];
@@ -183,6 +189,27 @@ io.on('connection', socket => {
         if (!gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] && !gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex]) {
             colourBoth = true;
         }
+
+        const wordsRemainingArray = getWordsRemaining(gameBoards[gameBoardIndex]);
+        gameBoards[gameBoardIndex].wordsRemaining = wordsRemainingArray.greenCounts
+        gameBoards[gameBoardIndex].bWordsRemaining = wordsRemainingArray.bGreenCounts
+        gameBoards[gameBoardIndex].aWordsRemaining = wordsRemainingArray.aGreenCounts
+
+        if (wordsRemainingArray.greenCounts > 0) {
+            console.log(wordsRemainingArray)
+            if (wordsRemainingArray.bGreenCounts == 0) {
+                gameBoards[gameBoardIndex]
+                gameBoards[gameBoardIndex].turn = 1
+                gameBoards[gameBoardIndex]
+            } else if( wordsRemainingArray.aGreenCounts == 0) {
+                gameBoards[gameBoardIndex].turn = -1
+            }
+        }
+        let sideTurn = 'A';
+        if (gameBoards[gameBoardIndex].turn == 1) {
+            sideTurn = 'B'
+        }
+
         updateValue = {
             "colour": gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex],
             "id": id,
@@ -194,7 +221,9 @@ io.on('connection', socket => {
             "word": gameBoards[gameBoardIndex].guessRows[guessRowIndex][guessIndex],
             "turnsCounter": gameBoards[gameBoardIndex].turnsCounter,
             "wordsRemaining": gameBoards[gameBoardIndex].wordsRemaining,
-            "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses
+            "incorrectGuesses": gameBoards[gameBoardIndex].incorrectGuesses,
+            "canEndTurn":  gameBoards[gameBoardIndex].canEndTurn,
+            "sideTurn": sideTurn
         }
         let textColour = '#707064'
         if (updateValue.colour == 'g') {
@@ -209,15 +238,17 @@ io.on('connection', socket => {
                                                                     bCanClick: gameBoards[gameBoardIndex].bCanClick, gameOver: gameBoards[gameBoardIndex].gameOver, 
                                                                     gameWon: gameBoards[gameBoardIndex].gameWon, turn: gameBoards[gameBoardIndex].turn,
                                                                 turnsCounter: gameBoards[gameBoardIndex].turnsCounter, wordsRemaining: gameBoards[gameBoardIndex].wordsRemaining,
-                                                            messages: gameBoards[gameBoardIndex].messages, incorrectGuesses: gameBoards[gameBoardIndex].incorrectGuesses}}, {}, (err, numReplaced) => {
+                                                            messages: gameBoards[gameBoardIndex].messages, incorrectGuesses: gameBoards[gameBoardIndex].incorrectGuesses,
+                                                        canEndTurn: gameBoards[gameBoardIndex].canEndTurn,
+                                                        aWordsRemaining: gameBoards[gameBoardIndex].aWordsRemaining, bWordsRemaining: gameBoards[gameBoardIndex].bWordsRemaining}}, {}, (err, numReplaced) => {
             if (err) console.log('error');
             io.to(codenamesId).emit('color_update', updateValue)
             io.to(codenamesId).emit('message', [currentMessage])
             
         })
-        
+    } 
     })
-
+    
 })
 
 
@@ -247,6 +278,7 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
         // gameBoards[gameBoardIndex].turn = -1
         gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         if (gameBoards[gameBoardIndex].bColourValue[guessRowIndex][guessIndex] == 'g'){
+            gameBoards[gameBoardIndex].canEndTurn = true
             gameBoards[gameBoardIndex].wordsRemaining -= 1
             if (gameBoards[gameBoardIndex].wordsRemaining == 0) {
                 console.log(`words remaining: ${gameBoards[gameBoardIndex].wordsRemaining}`)
@@ -266,6 +298,7 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
             gameBoards[gameBoardIndex].gameWon = false
             gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         } else {
+            gameBoards[gameBoardIndex].canEndTurn = false
             gameBoards[gameBoardIndex].turnsCounter += 1
             gameBoards[gameBoardIndex].incorrectGuesses += 1
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
@@ -276,6 +309,7 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
         // gameBoards[gameBoardIndex].turn = 1
         gameBoards[gameBoardIndex].bCanClick[guessRowIndex][guessIndex] = false
         if (gameBoards[gameBoardIndex].aColourValue[guessRowIndex][guessIndex] == 'g'){
+            gameBoards[gameBoardIndex].canEndTurn = true
             gameBoards[gameBoardIndex].wordsRemaining -= 1
             if(gameBoards[gameBoardIndex].wordsRemaining == 0) {
             gameBoards[gameBoardIndex].gameOver = true;
@@ -294,6 +328,7 @@ function updateValues(side, gameBoardIndex, guessRowIndex, guessIndex, room) {
             gameBoards[gameBoardIndex].gameWon = false
             gameBoards[gameBoardIndex].aCanClick[guessRowIndex][guessIndex] = false
         } else {
+            gameBoards[gameBoardIndex].canEndTurn = false
             gameBoards[gameBoardIndex].turnsCounter += 1
             gameBoards[gameBoardIndex].incorrectGuesses += 1
             gameBoards[gameBoardIndex].colours[guessRowIndex][guessIndex] = 'x'
@@ -319,6 +354,30 @@ function checkValidTurn(side, currentBoard, guessRowIndex, guessIndex) {
         return false;
     }
     return true;
+}
+
+
+function getWordsRemaining(gameBoard) {
+    let aGreenCounts = 0;
+    let bGreenCounts = 0;
+    let greenCounts = 0
+    for (let i = 0; i < 25; i ++) {
+        rowValue = Math.floor(i / 5);
+        colValue = i % 5;
+        if (gameBoard.aColourValue[rowValue][colValue] == 'g' && gameBoard.bCanClick[rowValue][colValue]) {
+            aGreenCounts += 1;
+        }
+        if (gameBoard.bColourValue[rowValue][colValue] == 'g' && gameBoard.aCanClick[rowValue][colValue]) {
+            bGreenCounts += 1;
+        }
+        if ((gameBoard.aColourValue[rowValue][colValue] == 'g' && gameBoard.bCanClick[rowValue][colValue])|| (gameBoard.bColourValue[rowValue][colValue] == 'g' && gameBoard.aCanClick[rowValue][colValue])) {
+            greenCounts += 1
+        } 
+    }
+    return {"greenCounts": greenCounts,
+            "aGreenCounts": aGreenCounts,
+            "bGreenCounts": bGreenCounts
+        }
 }
 
 async function newGameBoard(room, currentMessage) {
@@ -379,6 +438,10 @@ async function newGameBoard(room, currentMessage) {
                                     [true, true, true, true, true],
                                     [true, true, true, true,true]
                                 ]
+            let aGreenCounts = 0;
+            let bGreenCounts = 0;
+            let greenCounts = 0;
+
             for (let i = 0; i < 18; i++) {
                 rowValue = Math.floor(selectedPositions[i] / 5);
                 colValue = selectedPositions[i] % 5;
@@ -406,7 +469,23 @@ async function newGameBoard(room, currentMessage) {
                 }
 
             }
+           
+            for (let i = 0; i < 25; i++) {
+                rowValue = Math.floor(i / 5);
+                colValue = i % 5;
+                if (aColourValue[rowValue][colValue] == 'g') {
+                    aGreenCounts += 1;
+                }
+                if (bColourValue[rowValue][colValue] == 'g') {
+                    bGreenCounts += 1;
+                }
+                if (aColourValue[rowValue][colValue] == 'g' || bColourValue[rowValue][colValue] == 'g') {
+                    greenCounts += 1
+                }
+            }            
             
+
+
             const newGameData = {
                 "game": "codenames",
                 "name": room,
@@ -428,9 +507,12 @@ async function newGameBoard(room, currentMessage) {
                     "turn": 0,
                     "turnsCounter": 0,
                     "incorrectGuesses": 0,
-                    "wordsRemaining": 15,
+                    "wordsRemaining": greenCounts,
+                    "aWordsRemaining": aGreenCounts,
+                    "bWordsRemaining": bGreenCounts,
                     "messages": [{"text1": "Starting a new game", "colour1": "#707064", "bold1" : false, 
                                     "text2": "", "colour2": "#707064", "bold2": false}],
+                    "canEndTurn": false,
                     "_id": room + ':codenames'
             }
             dbGames.insert(newGameData)
@@ -449,7 +531,10 @@ async function newGameBoard(room, currentMessage) {
                 incorrectGuesses: 0,
                 messages: [{"text1": "Starting a new game", "colour1": "#707064", "bold1" : false, 
                 "text2": "", "colour2": "#707064", "bold2": false}],
-                wordsRemaining: 15
+                canEndTurn: false,
+                wordsRemaining: greenCounts,
+                aWordsRemaining: aGreenCounts,
+                bWordsRemaining: bGreenCounts
             }
             gameBoards.push(gameBoard)
             const gameBoardIndex = gameBoards.findIndex(x => x.id == room);

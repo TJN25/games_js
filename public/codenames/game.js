@@ -11,7 +11,7 @@ socket.emit('joinRoom', {side, codenamesId})
 
 //Set up the initial game state.
 // const titleDisplay = document.querySelector('.title-container')
-const titleDisplay = document.querySelector('.title-container')
+const titleDisplay = document.querySelector('.title-words')
 const tileDisplay = document.querySelector('.tile-container')
 const wordsDisplay = document.querySelector('.words-container')
 const greenContainer = document.getElementById('green-container')
@@ -23,13 +23,17 @@ const currentScore = document.querySelector('.current-score');
 const button = document.getElementById('new_codenames_game');
 
 function loopGamboard(gameBoard) {
+    console.log(gameBoard)
     titleDisplay.innerHTML = ""
-    titleDiv = document.createElement('h1');
-    titleDiv.textContent = 'Codenames'
+    titleDiv = document.createElement('div');
+    titleDiv.textContent = 'Code Names'
     titleDisplay.appendChild(titleDiv)
     currentScore.textContent = `${gameBoard.wordsRemaining} words remaining after ${gameBoard.turnsCounter} turns and ${gameBoard.incorrectGuesses} incorrect guesses`
-    button.classList.add('flip')
-    button.textContent = 'End turn'
+    if (gameBoard.canEndTurn || !gameBoard.gameOver) {
+        button.textContent = 'End turn'
+    } else {
+        button.textContent = 'Pick a word'
+    }
     button.style.background = '#45a049'
     const guessRows =  gameBoard.guessRows;
     const gameColors = gameBoard.colours;
@@ -44,7 +48,7 @@ function loopGamboard(gameBoard) {
     if ((turnSide == -1 && side == 'B') || (turnSide == 1 && side == 'A')) {
         console.log(`${turnSide} ${side}`)
         button.textContent = 'Wordmaster'
-        button.style.background = '#1c2fbd'
+        button.style.background = '#707064'
     }
     console.log(colourValue)   
     let currentRow = 0;
@@ -87,6 +91,7 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
         } else if (gameColors[guessRowIndex][guessIndex] == 'b'){
             tileElement.style.backgroundColor = '#000000'
         }
+        colourTile(gameBoard, guessRowIndex, guessIndex, side, tileElement)
 
         rowElement.append(tileElement)
     })
@@ -116,6 +121,8 @@ button.addEventListener('click', async event => {
 })
 
 
+
+
 function handleClick(value, id) {
     console.log(codenamesId);
     socket.emit('button_clicked', {side, id, codenamesId})
@@ -125,9 +132,9 @@ socket.on('endTurn', turnValue => {
     console.log(turnValue)
     if (turnValue.side == side) {
            button.textContent = 'Wordmaster'
-           button.style.background = '#1c2fbd'
+           button.style.background = '#707064'
     } else {
-        button.textContent = 'End turn'
+        button.textContent = 'Pick a word'
         button.style.background = '#548d4e'
     }
     currentScore.textContent = `${turnValue.wordsRemaining} words remaining after ${turnValue.turnsCounter} turns and ${turnValue.incorrectGuesses} incorrect guesses`
@@ -142,12 +149,24 @@ socket.on('color_update', updateValue => {
         gameOverScreen(updateValue.gameWon, updateValue.turnsCounter, updateValue.incorrectGuesses, updateValue.wordsRemaining)
     }
     if (updateValue.moveAccepted){
+        if (!updateValue.gameOver) {
+        if (updateValue.sideTurn == side) {
+            button.textContent = 'End turn'
+            button.style.background = '#548d43'
+        } else {
+            button.textContent = 'Wordmaster'
+            button.style.background = '#707064'
+        }
+    }
         const selectedTile = document.getElementById(updateValue.id);
         const selectedWord = document.getElementById(updateValue.word);
         selectedWord.style.textDecoration = "line-through"
         console.log(selectedWord)
         selectedTile.classList.add('flip')
         if (updateValue.colour == 'g') {
+            // if (updateValue.side == side) {
+                // button.textContent = 'End turn'
+            // }
         selectedTile.style.backgroundColor = '#548d4e';
         } else if (updateValue.colour == 'b'){
             selectedTile.style.background = "#000000"
@@ -157,13 +176,12 @@ socket.on('color_update', updateValue => {
                 selectedTile.style.background = "#b59f3a"
             }else {
             if (updateValue.side != side) {
-                button.textContent = 'End turn'
-                button.style.background = '#548d4e'
+                // button.textContent = 'Pick a word'
+                // button.style.background = '#548d4e'
            selectedTile.style.background = "linear-gradient(5deg, #707064 80%, #b59f3a 60%)"
             } else {
            selectedTile.style.background = "linear-gradient(-175deg, #707064 80%, #b59f3a 60%)"
-                button.textContent = 'Wordmaster'
-                button.style.background = '#1c2fbd'
+                // button.textContent = 'Wordmaster'
             } 
         }
         }
@@ -207,7 +225,7 @@ function outputMessage(message) {
 function gameOverScreen (gameWon, turns, incorrectGuesses, wordsRemaining) {
     if(gameWon) {
         titleDisplay.innerHTML = ""
-        div = document.createElement('h1');
+        div = document.createElement('div');
         div1 = document.createElement('span');
         div2 = document.createElement('span');
         div1.textContent = `You won ` 
@@ -219,7 +237,7 @@ function gameOverScreen (gameWon, turns, incorrectGuesses, wordsRemaining) {
 
     } else {
         titleDisplay.innerHTML = ""
-        div = document.createElement('h1');
+        div = document.createElement('div');
         div1 = document.createElement('span');
         div2 = document.createElement('span');
         div1.textContent = `You lost ` 
@@ -231,6 +249,35 @@ function gameOverScreen (gameWon, turns, incorrectGuesses, wordsRemaining) {
         div.append(div1)
         div.append(div2)
         titleDisplay.appendChild(div)
+    }
+}
+
+function colourTile(gameBoard, guessRowIndex, guessIndex, side, tileElement) {
+    const aCanClick = gameBoard.aCanClick[guessRowIndex][guessIndex]
+    const bCanClick = gameBoard.bCanClick[guessRowIndex][guessIndex]
+    const aColourValue = gameBoard.aColourValue[guessRowIndex][guessIndex]
+    const bColourValue = gameBoard.bColourValue[guessRowIndex][guessIndex]
+
+    if (aCanClick && bCanClick) {
+        return;
+    }
+
+    if (!aCanClick && bCanClick && bColourValue == 'x') {
+        //colour A
+        if (side == 'A') {
+            tileElement.style.background = "linear-gradient(-175deg, #707064 80%, #b59f3a 60%)" 
+        } else {
+            tileElement.style.background = "linear-gradient(5deg, #707064 80%, #b59f3a 60%)"
+        }
+        return;
+    }
+    if (!bCanClick && aCanClick && aColourValue == 'x') {
+        if (side == 'B') {
+            tileElement.style.background = "linear-gradient(-175deg, #707064 80%, #b59f3a 60%)" 
+        } else {
+            tileElement.style.background = "linear-gradient(5deg, #707064 80%, #b59f3a 60%)"
+        }
+        return;
     }
 }
 
