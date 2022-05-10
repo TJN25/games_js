@@ -79,7 +79,7 @@ guessRows.forEach((guessRow, guessRowIndex) =>  {
             blackContainer.append(wordElement);
 
         } else {
-            wordElement.style.color = '#707064'
+            wordElement.style.color = '#a3520b'
             greyContainer.append(wordElement);
         }
         tileElement.addEventListener('click', () => handleClick(tileText,tileId))
